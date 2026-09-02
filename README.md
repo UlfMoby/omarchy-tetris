@@ -30,6 +30,7 @@ xdg-open index.html
 - Next-piece preview
 - Score, lines cleared, and levels that speed up as you play
 - Pause, restart, and a clean dark frosted-glass look
+- Sound effects + a low-key chiptune rendition of the classic Theme A (mute with <kbd>M</kbd>) — all generated with the Web Audio API, no audio files needed
 
 ---
 

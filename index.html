@@ -91,11 +91,12 @@
       <div class="controls">
         <b>&#8592;</b>/<b>&#8594;</b> move &nbsp; <b>&#8595;</b> soft drop<br>
         <b>&#8593;</b> rotate &nbsp; <b>Space</b> hard drop<br>
-        <b>P</b> pause / resume
+        <b>P</b> pause / resume &nbsp; <b>M</b> mute
       </div>
       <div class="btn-row">
         <button id="pauseBtn" class="secondary" style="flex:1">Pause</button>
         <button id="newBtn" style="flex:1">New</button>
+        <button id="muteBtn" class="secondary" style="flex:1" title="Toggle sound (M)">Sound</button>
       </div>
     </div>
   </div>
@@ -162,6 +163,160 @@ function collides(b, cells, x, y) {
   return false;
 }
 
+// ---- Audio: sound effects + low-key soundtrack (Web Audio, no files) ----
+let audioCtx = null;
+let master = null;
+let muted = false;
+let musicTimer = null;
+let musicStep = 0;
+let musicNextT = 0;
+
+function ensureAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    master = audioCtx.createGain();
+    master.gain.value = 0.5;
+    master.connect(audioCtx.destination);
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+// Convert note name to Hz, e.g. note('E5') ==>
+function note(name) {
+  const m = name.match(/^([A-G]#?)(-?\d)$/);
+  const semis = { C:0, 'C#':1, D:2, 'D#':3, E:4, F:5, 'F#':6, G:7, 'G#':8, A:9, 'A#':10, B:11 };
+  const oct = +m[2];
+  const st = semis[m[1]] + (oct + 1) * 12;
+  return 440 * Math.pow(2, (st - 57) / 12);
+}
+
+function blast(type, freq, t, dur, vol, dest) {
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = type;
+  o.frequency.value = freq;
+  const now = t || audioCtx.currentTime;
+  const peak = vol;
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.exponentialRampToValueAtTime(peak, now + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+  o.connect(g); g.connect(dest || master);
+  o.start(now); o.stop(now + dur + 0.02);
+}
+
+function sfx(name) {
+  if (muted || !audioCtx) return;
+  const t = audioCtx.currentTime;
+  switch (name) {
+    case 'move':   blast('square', 220, t, 0.06, 0.10); break;
+    case 'rotate': blast('square', 330, t, 0.06, 0.10); blast('square', 440, t + 0.02, 0.06, 0.08); break;
+    case 'tick':   blast('triangle', 110, t, 0.05, 0.10); break;
+    case 'lock':   blast('triangle', 160, t, 0.09, 0.18); break;
+    case 'hard':   blast('triangle', 120, t, 0.12, 0.25); blast('square', 60, t, 0.12, 0.20); break;
+    case 'clear': {
+      // gentle rising arpeggio
+      [523, 659, 784, 1046].forEach((f, i) =>
+        blast('square', f, t + i * 0.07, 0.12, 0.16));
+      break;
+    }
+    case 'gameover': {
+      [392, 330, 262, 196].forEach((f, i) =>
+        blast('triangle', f, t + i * 0.16, 0.3, 0.20));
+      break;
+    }
+  }
+}
+
+// --- Soundtrack: mellow "Theme A" (Korobeiniki) loop ---
+// Melody & bass as note arrays; durations in eighth-note units (2 = quarter).
+const MEL_A = ['E5','B4','C5','D5','C5','B4','A4','A4',
+               'C5','E5','D5','C5','B4','C5','D5','E5',
+               'C5','A4','A4','-','D5','F5','A5','G5',
+               'F5','E5','C5','E5','D5','C5','B4','B4',
+               'C5','D5','E5','C5','A4','A4','-','-'];
+const MEL_B = ['D5','F5','A5','G5','F5','E5','C5','E5',
+               'D5','C5','B4','B4','C5','D5','E5','C5',
+               'A4','A4','-','-','D5','F5','A5','G5',
+               'F5','E5','C5','E5','D5','C5','B4','-'];
+const BASS_A = ['A2','A2','A2','A2','A2','A2','A2','A2',
+                'A2','A2','A2','A2','E3','E3','E3','E3',
+                'C3','C3','C3','C3','D3','D3','D3','D3',
+                'F3','F3','C3','C3','E3','E3','E3','E3',
+                'C3','C3','C3','C3','A2','A2','A2','A2'];
+const BASS_B = ['D3','D3','D3','D3','F3','F3','F3','F3',
+                'E3','E3','E3','E3','C3','C3','C3','C3',
+                'A2','A2','A2','A2','D3','D3','D3','D3',
+                'F3','F3','C3','C3','E3','E3','E3','E3'];
+
+// quarter-note BPM for the low-key feel
+const MUSIC_BPM = 104;
+// one eighth note, in seconds
+const EIGHTH = 60 / MUSIC_BPM / 2;
+
+function musicQueue() {
+  const section = Math.floor(musicStep / 32) % 2 === 0 ? 0 : 1;
+  const i = musicStep % 32;
+  const mel = section === 0 ? MEL_A : MEL_B;
+  const bas = section === 0 ? BASS_A : BASS_B;
+  let md = i < mel.length ? 1 : 2;
+  const m = mel[i] || '-';
+  const b = bas[i] || '-';
+  if (m !== '-') {
+    // soft triangle lead
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'triangle';
+    o.frequency.value = note(m);
+    g.gain.setValueAtTime(0.0001, musicNextT);
+    g.gain.exponentialRampToValueAtTime(0.16, musicNextT + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, musicNextT + EIGHTH * 0.95);
+    o.connect(g); g.connect(master);
+    o.start(musicNextT); o.stop(musicNextT + EIGHTH * 1.1);
+  }
+  if (b !== '-') {
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'sine';
+    o.frequency.value = note(b);
+    g.gain.setValueAtTime(0.0001, musicNextT);
+    g.gain.exponentialRampToValueAtTime(0.22, musicNextT + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, musicNextT + EIGHTH * 1.8);
+    o.connect(g); g.connect(master);
+    o.start(musicNextT); o.stop(musicNextT + EIGHTH * 2.0);
+  }
+  musicNextT += EIGHTH;
+  musicStep++;
+}
+
+function musicScheduler() {
+  if (musicTimer) return;
+  const ahead = 0.12;
+  musicTimer = setInterval(() => {
+    if (muted || paused || gameOver || !audioCtx) return;
+    while (musicNextT < audioCtx.currentTime + ahead) musicQueue();
+  }, 40);
+}
+
+function startMusic() {
+  ensureAudio();
+  if (muted) return;
+  musicStep = 0;
+  musicNextT = audioCtx.currentTime + 0.05;
+  musicScheduler();
+}
+
+function stopMusic() {
+  if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
+}
+
+function toggleMute() {
+  muted = !muted;
+  const btn = document.getElementById('muteBtn');
+  btn.textContent = muted ? 'Muted' : 'Sound';
+  if (muted) stopMusic();
+  else if (!gameOver && !paused) startMusic();
+}
+
 function spawn() {
   current = next || randPiece();
   next = randPiece();
@@ -170,6 +325,8 @@ function spawn() {
   current.y = 0;
   if (collides(board, current.cells, current.x, current.y)) {
     gameOver = true;
+    sfx('gameover');
+    stopMusic();
     document.getElementById('finalScore').textContent = score;
     document.getElementById('gameover').classList.remove('hidden');
   }
@@ -182,6 +339,7 @@ function lock() {
         const ny = current.y + r, nx = current.x + c;
         if (ny >= 0) board[ny][nx] = current.color;
       }
+  sfx('lock');
   clearLines();
   spawn();
 }
@@ -201,6 +359,7 @@ function clearLines() {
     const pts = [0, 100, 300, 500, 800][cleared];
     score += pts * level;
     level = Math.floor(lines / 10) + 1;
+    sfx('clear');
     document.getElementById('score').textContent = score;
     document.getElementById('lines').textContent = lines;
     document.getElementById('level').textContent = level;
@@ -212,6 +371,7 @@ function stepDown() {
   if (gameOver || paused) return;
   if (!collides(board, current.cells, current.x, current.y + 1)) {
     current.y++;
+    sfx('tick');
   } else {
     lock();
   }
@@ -227,6 +387,7 @@ function rotate() {
     if (!collides(board, rot, current.x + dx, current.y)) {
       current.cells = rot;
       current.x += dx;
+      sfx('rotate');
       break;
     }
   }
@@ -236,6 +397,7 @@ function rotate() {
 function hardDrop() {
   if (gameOver || paused) return;
   while (!collides(board, current.cells, current.x, current.y + 1)) current.y++;
+  sfx('hard');
   lock();
   draw();
 }
@@ -283,6 +445,7 @@ function scheduleDrop() {
 }
 
 function reset() {
+  ensureAudio();
   board = emptyBoard();
   score = 0; lines = 0; level = 1;
   gameOver = false; paused = false;
@@ -295,12 +458,14 @@ function reset() {
   spawn();
   scheduleDrop();
   draw();
+  startMusic();
 }
 
 function togglePause() {
   if (gameOver) return;
   paused = !paused;
   document.getElementById('pauseBtn').textContent = paused ? 'Resume' : 'Pause';
+  if (paused) stopMusic(); else startMusic();
 }
 
 // --- controls ---
@@ -308,17 +473,25 @@ document.addEventListener('keydown', (e) => {
   if (gameOver) return;
   const k = e.key;
   if (['ArrowLeft','ArrowRight','ArrowDown','ArrowUp',' '].includes(k)) e.preventDefault();
-  if (k === 'ArrowLeft')       { current.x--; if (collides(board,current.cells,current.x,current.y)) current.x++; draw(); }
-  else if (k === 'ArrowRight') { current.x++; if (collides(board,current.cells,current.x,current.y)) current.x--; draw(); }
+  let moved = false;
+  if (k === 'ArrowLeft')       { current.x--; if (collides(board,current.cells,current.x,current.y)) current.x++; else moved = true; draw(); }
+  else if (k === 'ArrowRight') { current.x++; if (collides(board,current.cells,current.x,current.y)) current.x--; else moved = true; draw(); }
   else if (k === 'ArrowDown')  { stepDown(); }
   else if (k === 'ArrowUp')    { rotate(); }
   else if (k === ' ')          { hardDrop(); }
   else if (k === 'p' || k === 'P') { togglePause(); }
+  else if (k === 'm' || k === 'M') { toggleMute(); }
+  if (moved) sfx('move');
 });
 
 document.getElementById('pauseBtn').onclick = togglePause;
 document.getElementById('newBtn').onclick = reset;
 document.getElementById('restartBtn').onclick = reset;
+document.getElementById('muteBtn').onclick = toggleMute;
+
+// start audio on any first interaction (browser autoplay policy)
+document.addEventListener('keydown', () => ensureAudio());
+document.addEventListener('pointerdown', () => ensureAudio());
 
 reset();
 
