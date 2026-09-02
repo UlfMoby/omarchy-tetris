@@ -1,5 +1,7 @@
 # omarchy-tetris
 
+made with ❤️ with an opencode AI-agent on Omarchy
+
 A single-file HTML Tetris game — no build step, no dependencies. Open `tetris.html` in any browser and play.
 
 ## ▶ Play it live
