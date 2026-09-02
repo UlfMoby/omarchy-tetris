@@ -2,7 +2,13 @@
 
 A single-file HTML Tetris game — no build step, no dependencies. Open `tetris.html` in any browser and play.
 
-## Play
+## ▶ Play it live
+
+[![Tetris preview](tetris_shot.png)](https://ulfmoby.github.io/omarchy-tetris/)
+
+Click the picture above to load the game in your browser (hosted on GitHub Pages).
+
+## Play locally
 
 ```bash
 xdg-open tetris.html
