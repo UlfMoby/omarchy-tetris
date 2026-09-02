@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tetris</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #171b26;
+    --border: #2a3143;
+    --text: #c9d3f0;
+    --muted: #6d7794;
+    --accent: #7aa2f7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(1200px 600px at 50% -10%, #1b2130 0%, var(--bg) 60%);
+    font-family: system-ui, -apple-system, sans-serif;
+    color: var(--text);
+  }
+  .wrap { display: flex; gap: 24px; align-items: flex-start; }
+  .board-wrap { position: relative; }
+  canvas#board {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 20px 50px rgba(0,0,0,.4);
+  }
+  canvas#next {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .side { width: 140px; display: flex; flex-direction: column; gap: 16px; }
+  .stat {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .stat .label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+  .stat .value { font-size: 26px; font-weight: 700; }
+  .side h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 0 0 8px; }
+  .controls { font-size: 12px; color: var(--muted); line-height: 1.7; border-top: 1px solid var(--border); padding-top: 12px; }
+  .controls b { color: var(--text); }
+  button {
+    background: var(--accent);
+    border: none; color: #0b0f1a; font-weight: 700;
+    padding: 10px 12px; border-radius: 8px; cursor: pointer;
+    font-size: 14px;
+  }
+  button.secondary { background: var(--border); color: var(--text); }
+  .btn-row { display: flex; gap: 8px; }
+  .overlay {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 12px;
+    background: rgba(8,10,16,.72); border-radius: 12px; backdrop-filter: blur(3px);
+    text-align: center; padding: 20px;
+  }
+  .overlay h1 { margin: 0; font-size: 34px; }
+  .overlay p { color: var(--muted); margin: 0 0 6px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="board-wrap">
+      <canvas id="board" width="300" height="600"></canvas>
+      <div id="gameover" class="overlay hidden">
+        <h1>Game Over</h1>
+        <p>Score: <b id="finalScore">0</b></p>
+        <div class="btn-row">
+          <button id="restartBtn">Play again</button>
+        </div>
+      </div>
+    </div>
+    <div class="side">
+      <div class="stat"><div class="label">Score</div><div id="score" class="value">0</div></div>
+      <div class="stat"><div class="label">Lines</div><div id="lines" class="value">0</div></div>
+      <div class="stat"><div class="label">Level</div><div id="level" class="value">1</div></div>
+      <div>
+        <h3>Next</h3>
+        <canvas id="next" width="80" height="80"></canvas>
+      </div>
+      <div class="controls">
+        <b>&#8592;</b>/<b>&#8594;</b> move &nbsp; <b>&#8595;</b> soft drop<br>
+        <b>&#8593;</b> rotate &nbsp; <b>Space</b> hard drop<br>
+        <b>P</b> pause / resume
+      </div>
+      <div class="btn-row">
+        <button id="pauseBtn" class="secondary" style="flex:1">Pause</button>
+        <button id="newBtn" style="flex:1">New</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+"use strict";
+const COLS = 10, ROWS = 20, CELL = 30;
+
+const SHAPES = [
+  { // I
+    color: '#5fd4f4'
+    , cells: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]]
+  },
+  { // O
+    color: '#f7e26a'
+    , cells: [[1,1],[1,1]]
+  },
+  { // T
+    color: '#d692f0'
+    , cells: [[0,1,0],[1,1,1],[0,0,0]]
+  },
+  { // S
+    color: '#72d572'
+    , cells: [[0,1,1],[1,1,0],[0,0,0]]
+  },
+  { // Z
+    color: '#f2768e'
+    , cells: [[1,1,0],[0,1,1],[0,0,0]]
+  },
+  { // J
+    color: '#8fb3ff'
+    , cells: [[1,0,0],[1,1,1],[0,0,0]]
+  },
+  { // L
+    color: '#ffa76a'
+    , cells: [[0,0,1],[1,1,1],[0,0,0]]
+  },
+];
+
+let board, current, next, score, lines, level, dropInt, gameOver, paused, raf;
+
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d');
+const ncanvas = document.getElementById('next');
+const nctx = ncanvas.getContext('2d');
+
+function randPiece() {
+  const s = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+  return { cells: s.cells.map(r => r.slice()), color: s.color, x: 3, y: 0 };
+}
+
+function emptyBoard() {
+  return Array.from({ length: ROWS }, () => new Array(COLS).fill(null));
+}
+
+function collides(b, cells, x, y) {
+  for (let r = 0; r < cells.length; r++)
+    for (let c = 0; c < cells[r].length; c++)
+      if (cells[r][c]) {
+        const nx = x + c, ny = y + r;
+        if (nx < 0 || nx >= COLS || ny >= ROWS) return true;
+        if (ny >= 0 && b[ny][nx]) return true;
+      }
+  return false;
+}
+
+function spawn() {
+  current = next || randPiece();
+  next = randPiece();
+  // center X
+  current.x = Math.floor((COLS - current.cells[0].length) / 2);
+  current.y = 0;
+  if (collides(board, current.cells, current.x, current.y)) {
+    gameOver = true;
+    document.getElementById('finalScore').textContent = score;
+    document.getElementById('gameover').classList.remove('hidden');
+  }
+}
+
+function lock() {
+  for (let r = 0; r < current.cells.length; r++)
+    for (let c = 0; c < current.cells[r].length; c++)
+      if (current.cells[r][c]) {
+        const ny = current.y + r, nx = current.x + c;
+        if (ny >= 0) board[ny][nx] = current.color;
+      }
+  clearLines();
+  spawn();
+}
+
+function clearLines() {
+  let cleared = 0;
+  for (let r = ROWS - 1; r >= 0; r--) {
+    if (board[r].every(cell => cell !== null)) {
+      board.splice(r, 1);
+      board.unshift(new Array(COLS).fill(null));
+      cleared++;
+      r++;
+    }
+  }
+  if (cleared) {
+    lines += cleared;
+    const pts = [0, 100, 300, 500, 800][cleared];
+    score += pts * level;
+    level = Math.floor(lines / 10) + 1;
+    document.getElementById('score').textContent = score;
+    document.getElementById('lines').textContent = lines;
+    document.getElementById('level').textContent = level;
+    scheduleDrop();
+  }
+}
+
+function stepDown() {
+  if (gameOver || paused) return;
+  if (!collides(board, current.cells, current.x, current.y + 1)) {
+    current.y++;
+  } else {
+    lock();
+  }
+  draw();
+}
+
+function rotate() {
+  const old = current.cells;
+  const n = old.length;
+  const rot = Array.from({ length: n }, (_, r) => Array.from({ length: n }, (_, c) => old[n - 1 - c][r]));
+  // try wall kicks
+  for (const dx of [0, -1, 1, -2, 2]) {
+    if (!collides(board, rot, current.x + dx, current.y)) {
+      current.cells = rot;
+      current.x += dx;
+      break;
+    }
+  }
+  draw();
+}
+
+function hardDrop() {
+  if (gameOver || paused) return;
+  while (!collides(board, current.cells, current.x, current.y + 1)) current.y++;
+  lock();
+  draw();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+  ctx.lineWidth = 1;
+  for (let r = 0; r <= ROWS; r++) {
+    ctx.beginPath(); ctx.moveTo(0, r*CELL); ctx.lineTo(canvas.width, r*CELL); ctx.stroke();
+  }
+  for (let c = 0; c <= COLS; c++) {
+    ctx.beginPath(); ctx.moveTo(c*CELL, 0); ctx.lineTo(c*CELL, canvas.height); ctx.stroke();
+  }
+  // locked cells
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (board[r][c]) drawCell(ctx, c, r, board[r][c]);
+  // current
+  for (let r = 0; r < current.cells.length; r++)
+    for (let c = 0; c < current.cells[r].length; c++)
+      if (current.cells[r][c]) drawCell(ctx, current.x + c, current.y + r, current.color);
+  // next preview
+  nctx.clearRect(0, 0, ncanvas.width, ncanvas.height);
+  const nc = next.cells;
+  const off = (80 - nc.length * 20) / 2;
+  for (let r = 0; r < nc.length; r++)
+    for (let c = 0; c < nc[r].length; c++)
+      if (nc[r][c]) drawCell(nctx, c, r, next.color, 20, off);
+}
+
+function drawCell(g, c, r, color, size = CELL, off = 0) {
+  g.fillStyle = color;
+  g.fillRect(off + c*size, off + r*size, size - 1, size - 1);
+  g.fillStyle = 'rgba(255,255,255,0.25)';
+  g.fillRect(off + c*size, off + r*size, size - 1, 3);
+  g.fillStyle = 'rgba(0,0,0,0.25)';
+  g.fillRect(off + c*size, off + (r + 1)*size - 3, size - 1, 3);
+}
+
+function scheduleDrop() {
+  clearInterval(dropInt);
+  dropInt = setInterval(stepDown, Math.max(80, 600 - (level - 1) * 60));
+}
+
+function reset() {
+  board = emptyBoard();
+  score = 0; lines = 0; level = 1;
+  gameOver = false; paused = false;
+  document.getElementById('score').textContent = 0;
+  document.getElementById('lines').textContent = 0;
+  document.getElementById('level').textContent = 1;
+  document.getElementById('gameover').classList.add('hidden');
+  document.getElementById('pauseBtn').textContent = 'Pause';
+  next = randPiece();
+  spawn();
+  scheduleDrop();
+  draw();
+}
+
+function togglePause() {
+  if (gameOver) return;
+  paused = !paused;
+  document.getElementById('pauseBtn').textContent = paused ? 'Resume' : 'Pause';
+}
+
+// --- controls ---
+document.addEventListener('keydown', (e) => {
+  if (gameOver) return;
+  const k = e.key;
+  if (['ArrowLeft','ArrowRight','ArrowDown','ArrowUp',' '].includes(k)) e.preventDefault();
+  if (k === 'ArrowLeft')       { current.x--; if (collides(board,current.cells,current.x,current.y)) current.x++; draw(); }
+  else if (k === 'ArrowRight') { current.x++; if (collides(board,current.cells,current.x,current.y)) current.x--; draw(); }
+  else if (k === 'ArrowDown')  { stepDown(); }
+  else if (k === 'ArrowUp')    { rotate(); }
+  else if (k === ' ')          { hardDrop(); }
+  else if (k === 'p' || k === 'P') { togglePause(); }
+});
+
+document.getElementById('pauseBtn').onclick = togglePause;
+document.getElementById('newBtn').onclick = reset;
+document.getElementById('restartBtn').onclick = reset;
+
+reset();
+
+// simple RAF loop so we keep responsiveness on left/right without blocking drops
+(function loop() { raf = requestAnimationFrame(loop); })();
+</script>
+</body>
+</html>
