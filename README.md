@@ -11,7 +11,7 @@ Click the picture above to load the game in your browser (hosted on GitHub Pages
 ## Play locally
 
 ```bash
-xdg-open tetris.html
+xdg-open index.html
 ```
 
 ## Controls
