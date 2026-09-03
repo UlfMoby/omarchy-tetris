@@ -137,6 +137,7 @@ const SHAPES = [
 ];
 
 let board, current, next, score, lines, level, dropInt, gameOver, paused, raf;
+let animations = [];
 
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
@@ -207,6 +208,19 @@ function sfx(name) {
         blast('square', f, t + i * 0.07, 0.12, 0.16));
       break;
     }
+    case 'tetris': {
+      // dramatic fanfare for 4-line clear
+      [523, 659, 784, 1046, 1318].forEach((f, i) =>
+        blast('sawtooth', f, t + i * 0.08, 0.2, 0.25));
+      blast('square', 262, t + 0.4, 0.4, 0.3);
+      break;
+    }
+    case 'boardclear': {
+      // victory jingle
+      [392, 494, 587, 784, 988, 1175].forEach((f, i) =>
+        blast('sine', f, t + i * 0.1, 0.15, 0.2));
+      break;
+    }
     case 'gameover': {
       [392, 330, 262, 196].forEach((f, i) =>
         blast('triangle', f, t + i * 0.16, 0.3, 0.20));
@@ -219,6 +233,72 @@ function toggleMute() {
   muted = !muted;
   const btn = document.getElementById('muteBtn');
   btn.textContent = muted ? 'Muted' : 'Sound';
+}
+
+// Animation system
+class FloatingText {
+  constructor(text, x, y, color = '#fff') {
+    this.text = text;
+    this.x = x;
+    this.y = y;
+    this.color = color;
+    this.alpha = 1;
+    this.scale = 1.5;
+    this.vy = -2;
+  }
+  
+  update() {
+    this.y += this.vy;
+    this.vy *= 0.98;
+    this.alpha -= 0.015;
+    this.scale = Math.max(1, this.scale - 0.02);
+    return this.alpha > 0;
+  }
+  
+  draw(ctx) {
+    ctx.save();
+    ctx.globalAlpha = this.alpha;
+    ctx.font = `bold ${24 * this.scale}px system-ui`;
+    ctx.fillStyle = this.color;
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 3;
+    ctx.textAlign = 'center';
+    ctx.strokeText(this.text, this.x, this.y);
+    ctx.fillText(this.text, this.x, this.y);
+    ctx.restore();
+  }
+}
+
+class ScreenFlash {
+  constructor(color = '#fff') {
+    this.color = color;
+    this.alpha = 0.6;
+  }
+  
+  update() {
+    this.alpha -= 0.03;
+    return this.alpha > 0;
+  }
+  
+  draw(ctx, canvas) {
+    ctx.save();
+    ctx.globalAlpha = this.alpha;
+    ctx.fillStyle = this.color;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  }
+}
+
+function addAnimation(anim) {
+  animations.push(anim);
+}
+
+function updateAnimations() {
+  animations = animations.filter(a => a.update());
+}
+
+function drawAnimations(ctx, canvas) {
+  animations.forEach(a => a.draw(ctx, canvas));
 }
 
 function spawn() {
@@ -262,7 +342,29 @@ function clearLines() {
     const pts = [0, 100, 300, 500, 800][cleared];
     score += pts * level;
     level = Math.floor(lines / 10) + 1;
-    sfx('clear');
+    
+    // Check for special events
+    const isTetris = cleared === 4;
+    const isBoardClear = board.every(row => row.every(cell => cell === null));
+    
+    if (isTetris) {
+      // 4-line clear: extra points and dramatic effects
+      score += 400 * level; // bonus for Tetris
+      sfx('tetris');
+      addAnimation(new ScreenFlash('#7aa2f7'));
+      addAnimation(new FloatingText('TETRIS!', 150, 300, '#5fd4f4'));
+      addAnimation(new FloatingText(`+${800 * level + 400 * level}`, 150, 340, '#f7e26a'));
+    } else if (isBoardClear) {
+      // Board clear: huge bonus
+      score += 1000 * level;
+      sfx('boardclear');
+      addAnimation(new ScreenFlash('#f7e26a'));
+      addAnimation(new FloatingText('BOARD CLEAR!', 150, 300, '#f7e26a'));
+      addAnimation(new FloatingText(`+${1000 * level}`, 150, 340, '#72d572'));
+    } else {
+      sfx('clear');
+    }
+    
     document.getElementById('score').textContent = score;
     document.getElementById('lines').textContent = lines;
     document.getElementById('level').textContent = level;
@@ -324,6 +426,9 @@ function draw() {
   for (let r = 0; r < current.cells.length; r++)
     for (let c = 0; c < current.cells[r].length; c++)
       if (current.cells[r][c]) drawCell(ctx, current.x + c, current.y + r, current.color);
+  // animations
+  updateAnimations();
+  drawAnimations(ctx, canvas);
   // next preview
   nctx.clearRect(0, 0, ncanvas.width, ncanvas.height);
   const nc = next.cells;
