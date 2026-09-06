@@ -284,10 +284,30 @@ function ghostY() {
   return gy;
 }
 
-// ---- Audio: sound effects + level-specific line-clear tones (Web Audio, no files) ----
+// ---- Audio: pooled oscillators for low-latency sound effects ----
 let audioCtx = null;
 let master = null;
 let muted = false;
+let audioReady = false;
+// Pool of pre-warmed oscillators ready to fire instantly
+const OSC_POOL_SIZE = 12;
+const oscPool = [];
+const gainPool = [];
+
+// Pre-warm all oscillators at startup so none are cold
+function prewarmOscillators() {
+  for (let i = 0; i < OSC_POOL_SIZE; i++) {
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    g.gain.value = 0.0001; // silent by default
+    o.connect(g);
+    g.connect(master);
+    o.start();
+    oscPool.push(o);
+    gainPool.push(g);
+  }
+  audioReady = true;
+}
 
 function ensureAudio() {
   if (!audioCtx) {
@@ -295,71 +315,66 @@ function ensureAudio() {
     master = audioCtx.createGain();
     master.gain.value = 0.5;
     master.connect(audioCtx.destination);
+    prewarmOscillators();
   }
   if (audioCtx.state === 'suspended') audioCtx.resume();
 }
 
-function blast(type, freq, t, dur, vol, dest) {
-  const o = audioCtx.createOscillator();
-  const g = audioCtx.createGain();
+// Grab a pooled oscillator and schedule it immediately (near-zero latency)
+function fireOsc(type, freq, t, dur, vol) {
+  const now = audioCtx.currentTime;
+  // Find a free or recycled oscillator from the pool
+  const idx = Math.floor(now * 7) % OSC_POOL_SIZE; // pseudo-round-robin
+  const o = oscPool[idx];
+  const g = gainPool[idx];
   o.type = type;
-  o.frequency.value = freq;
-  const now = t || audioCtx.currentTime;
+  o.frequency.setValueAtTime(freq, now);
   g.gain.setValueAtTime(0.0001, now);
   g.gain.exponentialRampToValueAtTime(vol, now + 0.008);
   g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
-  o.connect(g); g.connect(dest || master);
-  o.start(now); o.stop(now + dur + 0.02);
 }
 
 function sfx(name, cleared) {
-  if (muted || !audioCtx) return;
+  if (muted || !audioReady) return;
   const t = audioCtx.currentTime;
   switch (name) {
-    case 'move':   blast('square', 220, t, 0.06, 0.10); break;
-    case 'rotate': blast('square', 330, t, 0.06, 0.10); blast('square', 440, t + 0.02, 0.06, 0.08); break;
-    case 'tick':   blast('triangle', 110, t, 0.05, 0.10); break;
-    case 'lock':   blast('triangle', 160, t, 0.09, 0.18); break;
-    case 'hard':   blast('triangle', 120, t, 0.12, 0.25); blast('square', 60, t, 0.12, 0.20); break;
-    case 'lockdelay': blast('triangle', 220, t, 0.04, 0.07); break; // FEATURE 9: lock tick
+    case 'move':   fireOsc('square', 220, t, 0.06, 0.10); break;
+    case 'rotate': fireOsc('square', 330, t, 0.06, 0.10); fireOsc('square', 440, t + 0.02, 0.06, 0.08); break;
+    case 'tick':   fireOsc('triangle', 110, t, 0.05, 0.10); break;
+    case 'lock':   fireOsc('triangle', 160, t, 0.09, 0.18); break;
+    case 'hard':   fireOsc('triangle', 120, t, 0.12, 0.25); fireOsc('square', 60, t, 0.12, 0.20); break;
+    case 'lockdelay': fireOsc('triangle', 220, t, 0.04, 0.07); break;
     case 'clear':
-      // FEATURE 9: distinct tone per line count
       if (cleared === 1) {
-        // single line — soft blip
-        blast('triangle', 440, t, 0.10, 0.14);
-        blast('triangle', 550, t + 0.06, 0.08, 0.10);
+        fireOsc('triangle', 440, t, 0.10, 0.14);
+        fireOsc('triangle', 550, t + 0.06, 0.08, 0.10);
       } else if (cleared === 2) {
-        // double — ascending pair
-        blast('square', 392, t, 0.10, 0.15);
-        blast('square', 523, t + 0.07, 0.12, 0.15);
+        fireOsc('square', 392, t, 0.10, 0.15);
+        fireOsc('square', 523, t + 0.07, 0.12, 0.15);
       } else if (cleared === 3) {
-        // triple — rising triad
-        blast('square', 440, t, 0.08, 0.16);
-        blast('square', 554, t + 0.07, 0.08, 0.16);
-        blast('square', 659, t + 0.14, 0.10, 0.16);
+        fireOsc('square', 440, t, 0.08, 0.16);
+        fireOsc('square', 554, t + 0.07, 0.08, 0.16);
+        fireOsc('square', 659, t + 0.14, 0.10, 0.16);
       }
       break;
     case 'tetris':
-      // 4-line clear: dramatic fanfare + bass hit
-      blast('sawtooth', 523, t, 0.14, 0.22);
-      blast('sawtooth', 659, t + 0.08, 0.14, 0.22);
-      blast('sawtooth', 784, t + 0.16, 0.14, 0.22);
-      blast('sawtooth', 1046, t + 0.24, 0.20, 0.25);
-      blast('square', 262, t + 0.44, 0.40, 0.28);
+      fireOsc('sawtooth', 523, t, 0.14, 0.22);
+      fireOsc('sawtooth', 659, t + 0.08, 0.14, 0.22);
+      fireOsc('sawtooth', 784, t + 0.16, 0.14, 0.22);
+      fireOsc('sawtooth', 1046, t + 0.24, 0.20, 0.25);
+      fireOsc('square', 262, t + 0.44, 0.40, 0.28);
       break;
     case 'boardclear':
-      // Full board clear: victory fanfare
       [392, 494, 587, 784, 988, 1175, 1318].forEach((f, i) =>
-        blast('sine', f, t + i * 0.09, 0.18, 0.22));
+        fireOsc('sine', f, t + i * 0.09, 0.18, 0.22));
       break;
     case 'levelup':
-      // FEATURE 8: level-up chime — bright ascending arpeggio
       [523, 659, 784, 1046, 1318].forEach((f, i) =>
-        blast('triangle', f, t + i * 0.06, 0.14, 0.20));
+        fireOsc('triangle', f, t + i * 0.06, 0.14, 0.20));
       break;
     case 'gameover':
       [392, 330, 262, 196].forEach((f, i) =>
-        blast('triangle', f, t + i * 0.16, 0.3, 0.20));
+        fireOsc('triangle', f, t + i * 0.16, 0.3, 0.20));
       break;
   }
 }
