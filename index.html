@@ -422,7 +422,7 @@ function checkLevelUp(oldLevel, newLevel) {
 function drawGhost(g) {
   if (gameOver) return;
   const gy = ghostY();
-  if (gy === current.y) return; // no gap
+  // no gap — still draw ghost outline so user sees landing position
   for (let r = 0; r < current.cells.length; r++)
     for (let c = 0; c < current.cells[r].length; c++)
       if (current.cells[r][c]) {
@@ -483,13 +483,15 @@ function lock() {
 
 function clearLines() {
   let cleared = 0;
+  // collect full-row indices first, then splice in reverse to avoid index-shift bugs
+  const fullRows = [];
   for (let r = ROWS - 1; r >= 0; r--) {
-    if (board[r].every(cell => cell !== null)) {
-      board.splice(r, 1);
-      board.unshift(new Array(COLS).fill(null));
-      cleared++;
-      r++;
-    }
+    if (board[r].every(cell => cell !== null)) fullRows.push(r);
+  }
+  for (const row of fullRows.reverse()) {
+    board.splice(row, 1);
+    board.unshift(new Array(COLS).fill(null));
+    cleared++;
   }
   if (cleared) {
     const oldLevel = level;
@@ -543,7 +545,7 @@ function rotate() {
   const old = current.cells;
   const n = old.length;
   const rot = Array.from({ length: n }, (_, r) => Array.from({ length: n }, (_, c) => old[n - 1 - c][r]));
-  for (const dx of [0, -1, 1, -2, 2]) {
+  for (const dx of [0, -1, 1, -2, 2, -3, 3]) {
     if (!collides(board, rot, current.x + dx, current.y)) {
       current.cells = rot;
       current.x += dx;
@@ -631,6 +633,12 @@ function reset() {
 
 function togglePause() {
   if (gameOver) return;
+  // if lock-delay is running when we pause, lock the piece immediately
+  if (!paused && lockTimer !== null) {
+    clearTimeout(lockTimer);
+    lockTimer = null;
+    lock();
+  }
   paused = !paused;
   document.getElementById('pauseBtn').textContent = paused ? 'Resume' : 'Pause';
 }
