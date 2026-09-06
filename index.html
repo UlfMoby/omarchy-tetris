@@ -398,13 +398,22 @@ function toggleMute() {
 class FloatingText {
   constructor(text, x, y, color = '#fff') {
     this.text = text; this.x = x; this.y = y;
-    this.color = color; this.alpha = 1; this.scale = 1.5; this.vy = -2;
+    this.color = color; this.alpha = 1; this.scale = 1.5;
+    this.vy = -2; this.startTime = null; this.duration = 700; // ms
   }
-  update() {
-    this.y += this.vy; this.vy *= 0.98; this.alpha -= 0.015;
-    this.scale = Math.max(1, this.scale - 0.02);
-    return this.alpha > 0;
+  update(ts) {
+    if (this.startTime === null) this.startTime = ts;
+    const progress = Math.min((ts - this.startTime) / this.duration, 1);
+    // ease-out: fast start, slow end
+    const ease = 1 - Math.pow(1 - progress, 2);
+    this.y = this._baseY + ease * (this._baseY - 80);
+    this.alpha = 1 - ease;
+    this.scale = 1.5 - ease * 0.5;
+    return progress < 1;
   }
+  set y(v) { this._baseY = v; }
+  get y() { return this._baseY; }
+  init(baseY) { this._baseY = baseY; }
   draw(ctx) {
     ctx.save(); ctx.globalAlpha = this.alpha;
     ctx.font = `bold ${24 * this.scale}px system-ui`;
@@ -430,7 +439,7 @@ class ScreenFlash {
 }
 
 function addAnimation(anim) { animations.push(anim); }
-function updateAnimations() { animations = animations.filter(a => a.update()); }
+function updateAnimations(ts) { animations = animations.filter(a => a.update(ts)); }
 function drawAnimations(ctx, canvas) { animations.forEach(a => a.draw(ctx, canvas)); }
 
 // ---- Level-up flash (FEATURE 8) ----
@@ -438,7 +447,7 @@ function checkLevelUp(oldLevel, newLevel) {
   if (newLevel > oldLevel) {
     sfx('levelup');
     addAnimation(new ScreenFlash('#7aa2f7', 0.45));
-    addAnimation(new FloatingText(`LEVEL ${newLevel}!`, 150, 300, '#7aa2f7'));
+    addAnimation((() => { const t = new FloatingText(`LEVEL ${newLevel}!`, 150, 300, '#7aa2f7'); t.init(300); return t; })());
   }
 }
 
@@ -531,14 +540,14 @@ function clearLines() {
       score += 400 * level;
       sfx('tetris');
       addAnimation(new ScreenFlash('#5fd4f4'));
-      addAnimation(new FloatingText('TETRIS!', 150, 280, '#5fd4f4'));
-      addAnimation(new FloatingText(`+${800 * level + 400 * level}`, 150, 320, '#f7e26a'));
+      addAnimation((() => { const t = new FloatingText('TETRIS!', 150, 280, '#5fd4f4'); t.init(280); return t; })());
+      addAnimation((() => { const t = new FloatingText(`+${800 * level + 400 * level}`, 150, 320, '#f7e26a'); t.init(320); return t; })());
     } else if (isBoardClear) {
       score += 1000 * level;
       sfx('boardclear');
       addAnimation(new ScreenFlash('#f7e26a'));
-      addAnimation(new FloatingText('BOARD CLEAR!', 150, 280, '#f7e26a'));
-      addAnimation(new FloatingText(`+${1000 * level}`, 150, 320, '#72d572'));
+      addAnimation((() => { const t = new FloatingText('BOARD CLEAR!', 150, 280, '#f7e26a'); t.init(280); return t; })());
+      addAnimation((() => { const t = new FloatingText(`+${1000 * level}`, 150, 320, '#72d572'); t.init(320); return t; })());
     } else {
       sfx('clear', cleared); // FEATURE 9: pass cleared count
     }
@@ -611,7 +620,7 @@ function draw() {
     for (let c = 0; c < current.cells[r].length; c++)
       if (current.cells[r][c]) drawCell(ctx, current.x + c, current.y + r, current.color);
   // animations
-  updateAnimations();
+  updateAnimations(performance.now());
   drawAnimations(ctx, canvas);
   // next preview
   nctx.clearRect(0, 0, ncanvas.width, ncanvas.height);
