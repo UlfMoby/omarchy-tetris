@@ -66,6 +66,14 @@
   .overlay h1 { margin: 0; font-size: 34px; }
   .overlay p { color: var(--muted); margin: 0 0 6px; }
   .hidden { display: none; }
+  .newbest {
+    font-weight: 800; letter-spacing: 1px; font-size: 15px;
+    color: #0b0f1a; background: #f7e26a;
+    padding: 6px 12px; border-radius: 999px;
+    animation: pop .6s ease infinite alternate;
+  }
+  @keyframes pop { from { transform: scale(1); } to { transform: scale(1.08); } }
+  .stat .value.best { color: #f7e26a; }
 </style>
 </head>
 <body>
@@ -74,7 +82,9 @@
       <canvas id="board" width="300" height="600"></canvas>
       <div id="gameover" class="overlay hidden">
         <h1>Game Over</h1>
+        <p id="newBest" class="newbest hidden">NEW BEST!</p>
         <p>Score: <b id="finalScore">0</b></p>
+        <p>Best: <b id="bestScore">0</b></p>
         <div class="btn-row">
           <button id="restartBtn">Play again</button>
         </div>
@@ -82,6 +92,7 @@
     </div>
     <div class="side">
       <div class="stat"><div class="label">Score</div><div id="score" class="value">0</div></div>
+      <div class="stat"><div class="label">Best</div><div id="highscore" class="value best">0</div></div>
       <div class="stat"><div class="label">Lines</div><div id="lines" class="value">0</div></div>
       <div class="stat"><div class="label">Level</div><div id="level" class="value">1</div></div>
       <div>
@@ -138,6 +149,45 @@ const SHAPES = [
 
 let board, current, next, score, lines, level, dropInt, gameOver, paused, raf;
 let animations = [];
+
+// ---- Highscore system (persisted in localStorage) ----
+const HIGH_KEY = 'omarchy-tetris-highscore-v1';
+let highScore = 0;
+let highAtStart = 0;
+
+function loadHigh() {
+  try {
+    const raw = localStorage.getItem(HIGH_KEY);
+    const n = parseInt(raw, 10);
+    highScore = Number.isFinite(n) && n > 0 ? n : 0;
+  } catch (_) {
+    highScore = 0;
+  }
+  highAtStart = highScore;
+  updateHighUI();
+}
+
+function saveHigh() {
+  try {
+    localStorage.setItem(HIGH_KEY, String(highScore));
+  } catch (_) { /* storage unavailable (private mode) — ignore */ }
+}
+
+function updateHighUI() {
+  const el = document.getElementById('highscore');
+  if (el) el.textContent = highScore;
+}
+
+// Returns true if this game just set a new record.
+function checkHigh() {
+  if (score > highScore) {
+    highScore = score;
+    saveHigh();
+    updateHighUI();
+    return score > highAtStart && score > 0;
+  }
+  return false;
+}
 
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
@@ -310,7 +360,10 @@ function spawn() {
   if (collides(board, current.cells, current.x, current.y)) {
     gameOver = true;
     sfx('gameover');
+    const isNewBest = checkHigh();
     document.getElementById('finalScore').textContent = score;
+    document.getElementById('bestScore').textContent = highScore;
+    document.getElementById('newBest').classList.toggle('hidden', !isNewBest);
     document.getElementById('gameover').classList.remove('hidden');
   }
 }
@@ -368,6 +421,7 @@ function clearLines() {
     document.getElementById('score').textContent = score;
     document.getElementById('lines').textContent = lines;
     document.getElementById('level').textContent = level;
+    checkHigh();
     scheduleDrop();
   }
 }
@@ -457,9 +511,12 @@ function reset() {
   board = emptyBoard();
   score = 0; lines = 0; level = 1;
   gameOver = false; paused = false;
+  highAtStart = highScore;
   document.getElementById('score').textContent = 0;
   document.getElementById('lines').textContent = 0;
   document.getElementById('level').textContent = 1;
+  updateHighUI();
+  document.getElementById('newBest').classList.add('hidden');
   document.getElementById('gameover').classList.add('hidden');
   document.getElementById('pauseBtn').textContent = 'Pause';
   next = randPiece();
@@ -499,6 +556,7 @@ document.getElementById('muteBtn').onclick = toggleMute;
 document.addEventListener('keydown', () => ensureAudio());
 document.addEventListener('pointerdown', () => ensureAudio());
 
+loadHigh();
 reset();
 
 // simple RAF loop so we keep responsiveness on left/right without blocking drops

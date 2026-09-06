@@ -31,6 +31,7 @@ xdg-open index.html
 - Full 10×20 board, all 7 standard pieces (I, O, T, S, Z, J, L)
 - Next-piece preview
 - Score, lines cleared, and levels that speed up as you play
+- Highscore system: best score persisted in `localStorage`, live "Best" display, and a "NEW BEST!" badge on game over
 - Pause, restart, and a clean dark frosted-glass look
 - Sound effects (mute with <kbd>M</kbd>) — all generated with the Web Audio API, no audio files needed
 
