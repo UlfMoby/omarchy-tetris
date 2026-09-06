@@ -2,8 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Tetris</title>
+<meta name="description" content="A single-file HTML Tetris game — no build step, no dependencies. Open tetris.html in any browser and play.">
+<meta property="og:title" content="Omarchy Tetris">
+<meta property="og:description" content="Vibe-coded single-file HTML Tetris. No build step, no dependencies. Play now.">
+<meta property="og:type" content="website">
+<link rel="canonical" href="https://ulfmoby.github.io/omarchy-tetris/">
 <style>
   :root {
     --bg: #0f1117;
@@ -23,6 +28,9 @@
     background: radial-gradient(1200px 600px at 50% -10%, #1b2130 0%, var(--bg) 60%);
     font-family: system-ui, -apple-system, sans-serif;
     color: var(--text);
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
   }
   .wrap { display: flex; gap: 24px; align-items: flex-start; }
   .board-wrap { position: relative; }
@@ -31,6 +39,7 @@
     border: 1px solid var(--border);
     border-radius: 12px;
     box-shadow: 0 20px 50px rgba(0,0,0,.4);
+    image-rendering: pixelated;
   }
   canvas#next {
     background: var(--panel);
@@ -74,6 +83,52 @@
   }
   @keyframes pop { from { transform: scale(1); } to { transform: scale(1.08); } }
   .stat .value.best { color: #f7e26a; }
+
+  /* Mobile touch controls */
+  .mobile-controls {
+    display: none;
+    gap: 8px;
+    margin-top: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .touch-btn {
+    width: 58px;
+    height: 58px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    font-size: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    transition: background 0.1s;
+  }
+  .touch-btn:active, .touch-btn.pressed {
+    background: var(--border);
+  }
+  .touch-btn.wide { width: 126px; }
+  .touch-btn.primary {
+    background: var(--accent);
+    color: #0b0f1a;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  @media (max-width: 600px) {
+    .wrap { flex-direction: column; align-items: center; gap: 12px; }
+    .side { width: 300px; flex-direction: row; flex-wrap: wrap; gap: 8px; }
+    .side .stat { flex: 1; min-width: 60px; padding: 8px 10px; }
+    .side .stat .value { font-size: 20px; }
+    .side .controls { display: none; }
+    .mobile-controls { display: flex; }
+    canvas#board { width: 300px; height: 600px; }
+    .side > div:last-child { width: 100%; }
+  }
 </style>
 </head>
 <body>
@@ -100,14 +155,22 @@
         <canvas id="next" width="80" height="80"></canvas>
       </div>
       <div class="controls">
-        <b>&#8592;</b>/<b>&#8594;</b> move &nbsp; <b>&#8595;</b> soft drop<br>
-        <b>&#8593;</b> rotate &nbsp; <b>Space</b> hard drop<br>
-        <b>P</b> pause / resume &nbsp; <b>M</b> mute
+        <b>←</b>/<b>→</b> move   <b>↓</b> soft drop<br>
+        <b>↑</b> rotate   <b>Space</b> hard drop<br>
+        <b>P</b> pause / resume   <b>M</b> mute
       </div>
       <div class="btn-row">
         <button id="pauseBtn" class="secondary" style="flex:1">Pause</button>
         <button id="newBtn" style="flex:1">New</button>
         <button id="muteBtn" class="secondary" style="flex:1" title="Toggle sound (M)">Sound</button>
+      </div>
+      <!-- Mobile touch controls -->
+      <div class="mobile-controls" id="mobileControls">
+        <button class="touch-btn" id="btnLeft">&#8592;</button>
+        <button class="touch-btn" id="btnRotate">&#8635;</button>
+        <button class="touch-btn" id="btnRight">&#8594;</button>
+        <button class="touch-btn" id="btnDown">&#8595;</button>
+        <button class="touch-btn primary wide" id="btnDrop">DROP</button>
       </div>
     </div>
   </div>
@@ -149,6 +212,7 @@ const SHAPES = [
 
 let board, current, next, score, lines, level, dropInt, gameOver, paused, raf;
 let animations = [];
+let prevLevel = 1;
 
 // ---- Highscore system (persisted in localStorage) ----
 const HIGH_KEY = 'omarchy-tetris-highscore-v1';
@@ -178,7 +242,6 @@ function updateHighUI() {
   if (el) el.textContent = highScore;
 }
 
-// Returns true if this game just set a new record.
 function checkHigh() {
   if (score > highScore) {
     highScore = score;
@@ -214,7 +277,14 @@ function collides(b, cells, x, y) {
   return false;
 }
 
-// ---- Audio: sound effects + low-key soundtrack (Web Audio, no files) ----
+// ---- Ghost piece: returns Y offset where piece would land ----
+function ghostY() {
+  let gy = current.y;
+  while (!collides(board, current.cells, current.x, gy + 1)) gy++;
+  return gy;
+}
+
+// ---- Audio: sound effects + level-specific line-clear tones (Web Audio, no files) ----
 let audioCtx = null;
 let master = null;
 let muted = false;
@@ -235,15 +305,14 @@ function blast(type, freq, t, dur, vol, dest) {
   o.type = type;
   o.frequency.value = freq;
   const now = t || audioCtx.currentTime;
-  const peak = vol;
   g.gain.setValueAtTime(0.0001, now);
-  g.gain.exponentialRampToValueAtTime(peak, now + 0.008);
+  g.gain.exponentialRampToValueAtTime(vol, now + 0.008);
   g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
   o.connect(g); g.connect(dest || master);
   o.start(now); o.stop(now + dur + 0.02);
 }
 
-function sfx(name) {
+function sfx(name, cleared) {
   if (muted || !audioCtx) return;
   const t = audioCtx.currentTime;
   switch (name) {
@@ -252,30 +321,46 @@ function sfx(name) {
     case 'tick':   blast('triangle', 110, t, 0.05, 0.10); break;
     case 'lock':   blast('triangle', 160, t, 0.09, 0.18); break;
     case 'hard':   blast('triangle', 120, t, 0.12, 0.25); blast('square', 60, t, 0.12, 0.20); break;
-    case 'clear': {
-      // gentle rising arpeggio
-      [523, 659, 784, 1046].forEach((f, i) =>
-        blast('square', f, t + i * 0.07, 0.12, 0.16));
+    case 'lockdelay': blast('triangle', 220, t, 0.04, 0.07); break; // FEATURE 9: lock tick
+    case 'clear':
+      // FEATURE 9: distinct tone per line count
+      if (cleared === 1) {
+        // single line — soft blip
+        blast('triangle', 440, t, 0.10, 0.14);
+        blast('triangle', 550, t + 0.06, 0.08, 0.10);
+      } else if (cleared === 2) {
+        // double — ascending pair
+        blast('square', 392, t, 0.10, 0.15);
+        blast('square', 523, t + 0.07, 0.12, 0.15);
+      } else if (cleared === 3) {
+        // triple — rising triad
+        blast('square', 440, t, 0.08, 0.16);
+        blast('square', 554, t + 0.07, 0.08, 0.16);
+        blast('square', 659, t + 0.14, 0.10, 0.16);
+      }
       break;
-    }
-    case 'tetris': {
-      // dramatic fanfare for 4-line clear
+    case 'tetris':
+      // 4-line clear: dramatic fanfare + bass hit
+      blast('sawtooth', 523, t, 0.14, 0.22);
+      blast('sawtooth', 659, t + 0.08, 0.14, 0.22);
+      blast('sawtooth', 784, t + 0.16, 0.14, 0.22);
+      blast('sawtooth', 1046, t + 0.24, 0.20, 0.25);
+      blast('square', 262, t + 0.44, 0.40, 0.28);
+      break;
+    case 'boardclear':
+      // Full board clear: victory fanfare
+      [392, 494, 587, 784, 988, 1175, 1318].forEach((f, i) =>
+        blast('sine', f, t + i * 0.09, 0.18, 0.22));
+      break;
+    case 'levelup':
+      // FEATURE 8: level-up chime — bright ascending arpeggio
       [523, 659, 784, 1046, 1318].forEach((f, i) =>
-        blast('sawtooth', f, t + i * 0.08, 0.2, 0.25));
-      blast('square', 262, t + 0.4, 0.4, 0.3);
+        blast('triangle', f, t + i * 0.06, 0.14, 0.20));
       break;
-    }
-    case 'boardclear': {
-      // victory jingle
-      [392, 494, 587, 784, 988, 1175].forEach((f, i) =>
-        blast('sine', f, t + i * 0.1, 0.15, 0.2));
-      break;
-    }
-    case 'gameover': {
+    case 'gameover':
       [392, 330, 262, 196].forEach((f, i) =>
         blast('triangle', f, t + i * 0.16, 0.3, 0.20));
       break;
-    }
   }
 }
 
@@ -285,34 +370,22 @@ function toggleMute() {
   btn.textContent = muted ? 'Muted' : 'Sound';
 }
 
-// Animation system
+// ---- Animations ----
 class FloatingText {
   constructor(text, x, y, color = '#fff') {
-    this.text = text;
-    this.x = x;
-    this.y = y;
-    this.color = color;
-    this.alpha = 1;
-    this.scale = 1.5;
-    this.vy = -2;
+    this.text = text; this.x = x; this.y = y;
+    this.color = color; this.alpha = 1; this.scale = 1.5; this.vy = -2;
   }
-  
   update() {
-    this.y += this.vy;
-    this.vy *= 0.98;
-    this.alpha -= 0.015;
+    this.y += this.vy; this.vy *= 0.98; this.alpha -= 0.015;
     this.scale = Math.max(1, this.scale - 0.02);
     return this.alpha > 0;
   }
-  
   draw(ctx) {
-    ctx.save();
-    ctx.globalAlpha = this.alpha;
+    ctx.save(); ctx.globalAlpha = this.alpha;
     ctx.font = `bold ${24 * this.scale}px system-ui`;
-    ctx.fillStyle = this.color;
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 3;
-    ctx.textAlign = 'center';
+    ctx.fillStyle = this.color; ctx.strokeStyle = '#000';
+    ctx.lineWidth = 3; ctx.textAlign = 'center';
     ctx.strokeText(this.text, this.x, this.y);
     ctx.fillText(this.text, this.x, this.y);
     ctx.restore();
@@ -320,41 +393,56 @@ class FloatingText {
 }
 
 class ScreenFlash {
-  constructor(color = '#fff') {
-    this.color = color;
-    this.alpha = 0.6;
+  constructor(color = '#fff', alpha = 0.55) {
+    this.color = color; this.alpha = alpha;
   }
-  
-  update() {
-    this.alpha -= 0.03;
-    return this.alpha > 0;
-  }
-  
+  update() { this.alpha -= 0.04; return this.alpha > 0; }
   draw(ctx, canvas) {
-    ctx.save();
-    ctx.globalAlpha = this.alpha;
+    ctx.save(); ctx.globalAlpha = this.alpha;
     ctx.fillStyle = this.color;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
   }
 }
 
-function addAnimation(anim) {
-  animations.push(anim);
+function addAnimation(anim) { animations.push(anim); }
+function updateAnimations() { animations = animations.filter(a => a.update()); }
+function drawAnimations(ctx, canvas) { animations.forEach(a => a.draw(ctx, canvas)); }
+
+// ---- Level-up flash (FEATURE 8) ----
+function checkLevelUp(oldLevel, newLevel) {
+  if (newLevel > oldLevel) {
+    sfx('levelup');
+    addAnimation(new ScreenFlash('#7aa2f7', 0.45));
+    addAnimation(new FloatingText(`LEVEL ${newLevel}!`, 150, 300, '#7aa2f7'));
+  }
 }
 
-function updateAnimations() {
-  animations = animations.filter(a => a.update());
-}
-
-function drawAnimations(ctx, canvas) {
-  animations.forEach(a => a.draw(ctx, canvas));
+// ---- Ghost piece draw (FEATURE 3) ----
+function drawGhost(g) {
+  if (gameOver) return;
+  const gy = ghostY();
+  if (gy === current.y) return; // no gap
+  for (let r = 0; r < current.cells.length; r++)
+    for (let c = 0; c < current.cells[r].length; c++)
+      if (current.cells[r][c]) {
+        const px = (current.x + c) * CELL;
+        const py = (gy + r) * CELL;
+        g.save();
+        g.globalAlpha = 0.20;
+        g.fillStyle = current.color;
+        g.fillRect(px, py, CELL - 1, CELL - 1);
+        g.globalAlpha = 0.60;
+        g.strokeStyle = current.color;
+        g.lineWidth = 1.5;
+        g.strokeRect(px + 1, py + 1, CELL - 3, CELL - 3);
+        g.restore();
+      }
 }
 
 function spawn() {
   current = next || randPiece();
   next = randPiece();
-  // center X
   current.x = Math.floor((COLS - current.cells[0].length) / 2);
   current.y = 0;
   if (collides(board, current.cells, current.x, current.y)) {
@@ -368,7 +456,19 @@ function spawn() {
   }
 }
 
+let lockTimer = null;
+function startLockDelay() {
+  if (lockTimer) return;
+  lockTimer = setTimeout(() => {
+    if (!gameOver && !paused) {
+      sfx('lockdelay');
+    }
+    lockTimer = null;
+  }, 250);
+}
+
 function lock() {
+  clearTimeout(lockTimer); lockTimer = null;
   for (let r = 0; r < current.cells.length; r++)
     for (let c = 0; c < current.cells[r].length; c++)
       if (current.cells[r][c]) {
@@ -391,33 +491,34 @@ function clearLines() {
     }
   }
   if (cleared) {
+    const oldLevel = level;
     lines += cleared;
     const pts = [0, 100, 300, 500, 800][cleared];
     score += pts * level;
     level = Math.floor(lines / 10) + 1;
-    
-    // Check for special events
+
     const isTetris = cleared === 4;
     const isBoardClear = board.every(row => row.every(cell => cell === null));
-    
+
     if (isTetris) {
-      // 4-line clear: extra points and dramatic effects
-      score += 400 * level; // bonus for Tetris
+      score += 400 * level;
       sfx('tetris');
-      addAnimation(new ScreenFlash('#7aa2f7'));
-      addAnimation(new FloatingText('TETRIS!', 150, 300, '#5fd4f4'));
-      addAnimation(new FloatingText(`+${800 * level + 400 * level}`, 150, 340, '#f7e26a'));
+      addAnimation(new ScreenFlash('#5fd4f4'));
+      addAnimation(new FloatingText('TETRIS!', 150, 280, '#5fd4f4'));
+      addAnimation(new FloatingText(`+${800 * level + 400 * level}`, 150, 320, '#f7e26a'));
     } else if (isBoardClear) {
-      // Board clear: huge bonus
       score += 1000 * level;
       sfx('boardclear');
       addAnimation(new ScreenFlash('#f7e26a'));
-      addAnimation(new FloatingText('BOARD CLEAR!', 150, 300, '#f7e26a'));
-      addAnimation(new FloatingText(`+${1000 * level}`, 150, 340, '#72d572'));
+      addAnimation(new FloatingText('BOARD CLEAR!', 150, 280, '#f7e26a'));
+      addAnimation(new FloatingText(`+${1000 * level}`, 150, 320, '#72d572'));
     } else {
-      sfx('clear');
+      sfx('clear', cleared); // FEATURE 9: pass cleared count
     }
-    
+
+    // FEATURE 8: Level-up flash
+    checkLevelUp(oldLevel, level);
+
     document.getElementById('score').textContent = score;
     document.getElementById('lines').textContent = lines;
     document.getElementById('level').textContent = level;
@@ -432,7 +533,7 @@ function stepDown() {
     current.y++;
     sfx('tick');
   } else {
-    lock();
+    startLockDelay();
   }
   draw();
 }
@@ -441,7 +542,6 @@ function rotate() {
   const old = current.cells;
   const n = old.length;
   const rot = Array.from({ length: n }, (_, r) => Array.from({ length: n }, (_, c) => old[n - 1 - c][r]));
-  // try wall kicks
   for (const dx of [0, -1, 1, -2, 2]) {
     if (!collides(board, rot, current.x + dx, current.y)) {
       current.cells = rot;
@@ -455,6 +555,7 @@ function rotate() {
 
 function hardDrop() {
   if (gameOver || paused) return;
+  clearTimeout(lockTimer); lockTimer = null;
   while (!collides(board, current.cells, current.x, current.y + 1)) current.y++;
   sfx('hard');
   lock();
@@ -476,6 +577,8 @@ function draw() {
   for (let r = 0; r < ROWS; r++)
     for (let c = 0; c < COLS; c++)
       if (board[r][c]) drawCell(ctx, c, r, board[r][c]);
+  // ghost piece (FEATURE 3)
+  drawGhost(ctx);
   // current
   for (let r = 0; r < current.cells.length; r++)
     for (let c = 0; c < current.cells[r].length; c++)
@@ -509,7 +612,7 @@ function scheduleDrop() {
 function reset() {
   ensureAudio();
   board = emptyBoard();
-  score = 0; lines = 0; level = 1;
+  score = 0; lines = 0; level = 1; prevLevel = 1;
   gameOver = false; paused = false;
   highAtStart = highScore;
   document.getElementById('score').textContent = 0;
@@ -532,25 +635,79 @@ function togglePause() {
 }
 
 // --- controls ---
+function handleInput(action) {
+  if (gameOver) return;
+  ensureAudio();
+  let moved = false;
+  if (action === 'left') {
+    current.x--; if (collides(board, current.cells, current.x, current.y)) current.x++; else moved = true; draw();
+  } else if (action === 'right') {
+    current.x++; if (collides(board, current.cells, current.x, current.y)) current.x--; else moved = true; draw();
+  } else if (action === 'down') {
+    stepDown();
+  } else if (action === 'rotate') {
+    rotate();
+  } else if (action === 'drop') {
+    hardDrop();
+  } else if (action === 'pause') {
+    togglePause();
+  } else if (action === 'mute') {
+    toggleMute();
+  }
+  if (moved) sfx('move');
+}
+
 document.addEventListener('keydown', (e) => {
   if (gameOver) return;
   const k = e.key;
   if (['ArrowLeft','ArrowRight','ArrowDown','ArrowUp',' '].includes(k)) e.preventDefault();
-  let moved = false;
-  if (k === 'ArrowLeft')       { current.x--; if (collides(board,current.cells,current.x,current.y)) current.x++; else moved = true; draw(); }
-  else if (k === 'ArrowRight') { current.x++; if (collides(board,current.cells,current.x,current.y)) current.x--; else moved = true; draw(); }
-  else if (k === 'ArrowDown')  { stepDown(); }
-  else if (k === 'ArrowUp')    { rotate(); }
-  else if (k === ' ')          { hardDrop(); }
-  else if (k === 'p' || k === 'P') { togglePause(); }
-  else if (k === 'm' || k === 'M') { toggleMute(); }
-  if (moved) sfx('move');
+  if (k === 'ArrowLeft')       handleInput('left');
+  else if (k === 'ArrowRight')  handleInput('right');
+  else if (k === 'ArrowDown')   handleInput('down');
+  else if (k === 'ArrowUp')     handleInput('rotate');
+  else if (k === ' ')           handleInput('drop');
+  else if (k === 'p' || k === 'P') handleInput('pause');
+  else if (k === 'm' || k === 'M') handleInput('mute');
 });
 
-document.getElementById('pauseBtn').onclick = togglePause;
+// FEATURE 5: Mobile touch controls
+function bindTouchBtn(id, action) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  const fire = (e) => { e.preventDefault(); handleInput(action); };
+  btn.addEventListener('touchstart', fire, { passive: false });
+  btn.addEventListener('mousedown', fire);
+}
+
+bindTouchBtn('btnLeft', 'left');
+bindTouchBtn('btnRight', 'right');
+bindTouchBtn('btnRotate', 'rotate');
+bindTouchBtn('btnDown', 'down');
+bindTouchBtn('btnDrop', 'drop');
+document.getElementById('pauseBtn').onclick = () => handleInput('pause');
 document.getElementById('newBtn').onclick = reset;
 document.getElementById('restartBtn').onclick = reset;
-document.getElementById('muteBtn').onclick = toggleMute;
+document.getElementById('muteBtn').onclick = () => handleInput('mute');
+
+// Swipe detection (FEATURE 5)
+let touchStartX = 0, touchStartY = 0;
+canvas.addEventListener('touchstart', (e) => {
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+}, { passive: true });
+canvas.addEventListener('touchend', (e) => {
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  const dy = e.changedTouches[0].clientY - touchStartY;
+  const absDx = Math.abs(dx), absDy = Math.abs(dy);
+  if (Math.max(absDx, absDy) < 20) return; // too small
+  ensureAudio();
+  if (absDx > absDy) {
+    handleInput(dx > 0 ? 'right' : 'left');
+  } else {
+    if (dy > 30) handleInput('drop'); // swipe down = hard drop
+    else if (dy < -10) handleInput('rotate');
+  }
+}, { passive: true });
 
 // start audio on any first interaction (browser autoplay policy)
 document.addEventListener('keydown', () => ensureAudio());
@@ -559,7 +716,6 @@ document.addEventListener('pointerdown', () => ensureAudio());
 loadHigh();
 reset();
 
-// simple RAF loop so we keep responsiveness on left/right without blocking drops
 (function loop() { raf = requestAnimationFrame(loop); })();
 </script>
 </body>
