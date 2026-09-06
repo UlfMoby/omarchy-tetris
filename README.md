@@ -1,5 +1,7 @@
 # Omarchy Tetris
 
+[![Tetris game screenshot](tetris_shot.png)](https://ulfmoby.github.io/omarchy-tetris/)
+
 A single-file HTML Tetris game — no build step, no dependencies. Open `index.html` in any browser and play.
 
 **Live:** [https://ulfmoby.github.io/omarchy-tetris/](https://ulfmoby.github.io/omarchy-tetris/)
