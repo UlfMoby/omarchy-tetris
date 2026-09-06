@@ -119,6 +119,14 @@
     font-size: 13px;
     font-weight: 700;
   }
+  .version-badge {
+    font-size: 10px;
+    color: var(--muted);
+    text-align: center;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    letter-spacing: 0.5px;
+  }
   @media (max-width: 600px) {
     .wrap { flex-direction: column; align-items: center; gap: 12px; }
     .side { width: 300px; flex-direction: row; flex-wrap: wrap; gap: 8px; }
@@ -164,6 +172,7 @@
         <button id="newBtn" style="flex:1">New</button>
         <button id="muteBtn" class="secondary" style="flex:1" title="Toggle sound (M)">Sound</button>
       </div>
+      <div class="version-badge">v1.4.0</div>
       <!-- Mobile touch controls -->
       <div class="mobile-controls" id="mobileControls">
         <button class="touch-btn" id="btnLeft">&#8592;</button>
