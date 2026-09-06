@@ -396,10 +396,11 @@ function toggleMute() {
 
 // ---- Animations ----
 class FloatingText {
-  constructor(text, x, y, color = '#fff') {
+  constructor(text, x, y, color = '#fff', fast = false) {
     this.text = text; this.x = x; this.y = y;
     this.color = color; this.alpha = 1; this.scale = 1.5;
-    this.vy = -2; this.startTime = null; this.duration = 700; // ms
+    this.vy = -2; this.startTime = null;
+    this.duration = fast ? 300 : 700; // ms
   }
   update(ts) {
     if (this.startTime === null) this.startTime = ts;
@@ -540,14 +541,14 @@ function clearLines() {
       score += 400 * level;
       sfx('tetris');
       addAnimation(new ScreenFlash('#5fd4f4'));
-      addAnimation((() => { const t = new FloatingText('TETRIS!', 150, 280, '#5fd4f4'); t.init(280); return t; })());
-      addAnimation((() => { const t = new FloatingText(`+${800 * level + 400 * level}`, 150, 320, '#f7e26a'); t.init(320); return t; })());
+      addAnimation((() => { const t = new FloatingText('TETRIS!', 150, 280, '#5fd4f4', true); t.init(280); return t; })());
+      addAnimation((() => { const t = new FloatingText(`+${800 * level + 400 * level}`, 150, 320, '#f7e26a', true); t.init(320); return t; })());
     } else if (isBoardClear) {
       score += 1000 * level;
       sfx('boardclear');
       addAnimation(new ScreenFlash('#f7e26a'));
-      addAnimation((() => { const t = new FloatingText('BOARD CLEAR!', 150, 280, '#f7e26a'); t.init(280); return t; })());
-      addAnimation((() => { const t = new FloatingText(`+${1000 * level}`, 150, 320, '#72d572'); t.init(320); return t; })());
+      addAnimation((() => { const t = new FloatingText('BOARD CLEAR!', 150, 280, '#f7e26a', true); t.init(280); return t; })());
+      addAnimation((() => { const t = new FloatingText(`+${1000 * level}`, 150, 320, '#72d572', true); t.init(320); return t; })());
     } else {
       sfx('clear', cleared); // FEATURE 9: pass cleared count
     }
