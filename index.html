@@ -462,6 +462,7 @@ function startLockDelay() {
   lockTimer = setTimeout(() => {
     if (!gameOver && !paused) {
       sfx('lockdelay');
+      lock();
     }
     lockTimer = null;
   }, 250);
