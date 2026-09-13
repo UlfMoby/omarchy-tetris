@@ -778,12 +778,10 @@ document.getElementById('startBtn').addEventListener('click', hideOverlay);
 document.addEventListener('keydown', e => { 
   if (e.key) handleInput(e.key.length === 1 ? e.key.toLowerCase() : 'new');
 }, true);
-document.addEventListener('pointerdown', () => handleInput('new'));
+document.addEventListener('pointerdown', hideOverlay);
 
 loadHigh();
-reset();
-
-(function loop() { raf = requestAnimationFrame(loop); })();
+() { raf = requestAnimationFrame(loop); })();
 </script>
 </body>
 </html>
