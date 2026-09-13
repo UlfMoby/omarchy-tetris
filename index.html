@@ -161,15 +161,7 @@
         </div>
       </div>
     </div>
-    
-<div class="start-overlay hidden" id="startOverlay">
-  <div style="text-align:center; padding:20px;">
-    <h1 style="color:var(--accent); font-size:48px; margin-bottom:8px;">Tokyo Night Tetris</h1>
-    <p style="color:var(--muted); font-size:16px;">Click anywhere to start!</p>
-    <button id="startBtn" style="background:var(--accent); color:#0b0f1a; padding:16px 32px; border:none; border-radius:12px; font-size:20px; font-weight:700; cursor:pointer;">Start Game</button>
-  </div>
-</div>
-<div class="side">
+    <div class="side">
       <div class="stat"><div class="label">Score</div><div id="score" class="value">0</div></div>
       <div class="stat"><div class="label">Best</div><div id="highscore" class="value best">0</div></div>
       <div class="stat"><div class="label">Lines</div><div id="lines" class="value">0</div></div>
@@ -773,38 +765,21 @@ canvas.addEventListener('touchend', (e) => {
 }, { passive: true });
 
 // start audio on any first interaction (browser autoplay policy)
-document.addEventListener('keydown', () => ensureAudio());
-document.addEventListener('pointerdown', () => ensureAudio());
+// Start overlay - game won't start until user clicks to show it
+// This handles browser autoplay policy by requiring user interaction first
+const hideOverlay = () => {
+  document.getElementById('startOverlay')?.classList.add('hidden');
+  if (audioCtx) {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  }
+};
 
-
-// Show start overlay on load for better UX
-document.getElementById('startOverlay')?.classList.remove('hidden');
-document.getElementById('startBtn').addEventListener('click', () => { 
-  document.getElementById('startOverlay')?.classList.add('hidden'); 
-  handleInput('new'); 
-});
-
-// Also hide when any key or pointer event happens
+document.getElementById('startBtn').addEventListener('click', hideOverlay);
 document.addEventListener('keydown', e => { 
-  if (e.key) { 
-    document.getElementById('startOverlay')?.classList.add('hidden'); 
-    handleInput(e.key.length === 1 ? e.key.toLowerCase() : 'new'); 
-  } 
+  if (e.key) handleInput(e.key.length === 1 ? e.key.toLowerCase() : 'new');
 }, true);
-document.addEventListener('pointerdown', () => { 
-  document.getElementById('startOverlay')?.classList.remove('hidden'); 
-  handleInput('new'); 
-});
-// Show start overlay on load for better UX
-document.getElementById('startOverlay')?.classList.remove('hidden');
-document.getElementById('startBtn').addEventListener('click', () => { 
-  document.getElementById('startOverlay')?.classList.remove('hidden');
-  handleInput('new'); // Start new game
-});
-document.addEventListener('pointerdown', () => { 
-  document.getElementById('startOverlay')?.classList.remove('hidden');
-  handleInput('new'); 
-});
+document.addEventListener('pointerdown', () => handleInput('new'));
+
 loadHigh();
 reset();
 
