@@ -161,7 +161,15 @@
         </div>
       </div>
     </div>
-    <div class="side">
+    
+<div class="start-overlay hidden" id="startOverlay">
+  <div style="text-align:center; padding:20px;">
+    <h1 style="color:var(--accent); font-size:48px; margin-bottom:8px;">Tokyo Night Tetris</h1>
+    <p style="color:var(--muted); font-size:16px;">Click anywhere to start!</p>
+    <button id="startBtn" style="background:var(--accent); color:#0b0f1a; padding:16px 32px; border:none; border-radius:12px; font-size:20px; font-weight:700; cursor:pointer;">Start Game</button>
+  </div>
+</div>
+<div class="side">
       <div class="stat"><div class="label">Score</div><div id="score" class="value">0</div></div>
       <div class="stat"><div class="label">Best</div><div id="highscore" class="value best">0</div></div>
       <div class="stat"><div class="label">Lines</div><div id="lines" class="value">0</div></div>
@@ -785,6 +793,16 @@ document.addEventListener('keydown', e => {
 }, true);
 document.addEventListener('pointerdown', () => { 
   document.getElementById('startOverlay')?.classList.remove('hidden'); 
+  handleInput('new'); 
+});
+// Show start overlay on load for better UX
+document.getElementById('startOverlay')?.classList.remove('hidden');
+document.getElementById('startBtn').addEventListener('click', () => { 
+  document.getElementById('startOverlay')?.classList.remove('hidden');
+  handleInput('new'); // Start new game
+});
+document.addEventListener('pointerdown', () => { 
+  document.getElementById('startOverlay')?.classList.remove('hidden');
   handleInput('new'); 
 });
 loadHigh();
