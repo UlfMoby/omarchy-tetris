@@ -11,12 +11,12 @@
 <link rel="canonical" href="https://ulfmoby.github.io/omarchy-tetris/">
 <style>
   :root {
-    --bg: #0f1117;
-    --panel: #171b26;
-    --border: #2a3143;
-    --text: #c9d3f0;
-    --muted: #6d7794;
-    --accent: #7aa2f7;
+    --bg: #050814;
+    --panel: #131029;
+    --border: #5d3fd3;
+    --text: #e879f9;
+    --muted: #c084fc;
+    --accent: #ec4899;
   }
   * { box-sizing: border-box; }
   body {
@@ -25,7 +25,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: radial-gradient(1200px 600px at 50% -10%, #1b2130 0%, var(--bg) 60%);
+    background: radial-gradient(1500px 800px at 50% -15%, \#2d1b4e 0%, \#151025 50%, var(--bg) 80%);
     font-family: system-ui, -apple-system, sans-serif;
     color: var(--text);
     touch-action: none;
@@ -77,12 +77,12 @@
   .hidden { display: none; }
   .newbest {
     font-weight: 800; letter-spacing: 1px; font-size: 15px;
-    color: #0b0f1a; background: #f7e26a;
+    color: #0b0f1a; background: #ec4899;
     padding: 6px 12px; border-radius: 999px;
     animation: pop .6s ease infinite alternate;
   }
   @keyframes pop { from { transform: scale(1); } to { transform: scale(1.08); } }
-  .stat .value.best { color: #f7e26a; }
+  .stat .value.best { color: \#ec4899; font-weight: 700; text-shadow: 0 0 12px rgba(236,72,153,0.6); }
 
   /* Mobile touch controls */
   .mobile-controls {
@@ -190,31 +190,31 @@ const COLS = 10, ROWS = 20, CELL = 30;
 
 const SHAPES = [
   { // I
-    color: '#5fd4f4'
+    color: '#2dd4bf';
     , cells: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]]
   },
   { // O
-    color: '#f7e26a'
+    color: '#fb923c';
     , cells: [[1,1],[1,1]]
   },
   { // T
-    color: '#d692f0'
+    color: '#c084fc';
     , cells: [[0,1,0],[1,1,1],[0,0,0]]
   },
   { // S
-    color: '#72d572'
+    color: '#10b981';
     , cells: [[0,1,1],[1,1,0],[0,0,0]]
   },
   { // Z
-    color: '#f2768e'
+    color: '#f43f5e';
     , cells: [[1,1,0],[0,1,1],[0,0,0]]
   },
   { // J
-    color: '#8fb3ff'
+    color: '#a78bfa';
     , cells: [[1,0,0],[1,1,1],[0,0,0]]
   },
   { // L
-    color: '#ffa76a'
+    color: '#f97316';
     , cells: [[0,0,1],[1,1,1],[0,0,0]]
   },
 ];
@@ -447,8 +447,8 @@ function drawAnimations(ctx, canvas) { animations.forEach(a => a.draw(ctx, canva
 function checkLevelUp(oldLevel, newLevel) {
   if (newLevel > oldLevel) {
     sfx('levelup');
-    addAnimation(new ScreenFlash('#7aa2f7', 0.45));
-    addAnimation((() => { const t = new FloatingText(`LEVEL ${newLevel}!`, 150, 300, '#7aa2f7'); t.init(300); return t; })());
+    addAnimation(new ScreenFlash('#c084fc', 0.45));
+    addAnimation((() => { const t = new FloatingText(`LEVEL ${newLevel}!`, 150, 300, '#c084fc'); t.init(300); return t; })());
   }
 }
 
@@ -540,14 +540,14 @@ function clearLines() {
     if (isTetris) {
       score += 400 * level;
       sfx('tetris');
-      addAnimation(new ScreenFlash('#5fd4f4'));
-      addAnimation((() => { const t = new FloatingText('TETRIS!', 150, 280, '#5fd4f4', true); t.init(280); return t; })());
-      addAnimation((() => { const t = new FloatingText(`+${800 * level + 400 * level}`, 150, 320, '#f7e26a', true); t.init(320); return t; })());
+      addAnimation(new ScreenFlash('#2dd4bf'));
+      addAnimation((() => { const t = new FloatingText('TETRIS!', 150, 280, '#2dd4bf', true); t.init(280); return t; })());
+      addAnimation((() => { const t = new FloatingText(`+${800 * level + 400 * level}`, 150, 320, '#fb923c', true); t.init(320); return t; })());
     } else if (isBoardClear) {
       score += 1000 * level;
       sfx('boardclear');
-      addAnimation(new ScreenFlash('#f7e26a'));
-      addAnimation((() => { const t = new FloatingText('BOARD CLEAR!', 150, 280, '#f7e26a', true); t.init(280); return t; })());
+      addAnimation(new ScreenFlash('#fb923c'));
+      addAnimation((() => { const t = new FloatingText('BOARD CLEAR!', 150, 280, '#fb923c', true); t.init(280); return t; })());
       addAnimation((() => { const t = new FloatingText(`+${1000 * level}`, 150, 320, '#72d572', true); t.init(320); return t; })());
     } else {
       sfx('clear', cleared); // FEATURE 9: pass cleared count
