@@ -143,7 +143,15 @@
   <div class="wrap">
     <div class="board-wrap">
       <canvas id="board" width="300" height="600"></canvas>
-      <div id="gameover" class="overlay hidden">
+      
+<div class="start-overlay hidden" id="startOverlay">
+  <div style="text-align:center; padding:20px;">
+    <h1 style="color:var(--accent); font-size:48px; margin-bottom:8px;">Tokyo Night Tetris</h1>
+    <p style="color:var(--muted); font-size:16px;">Click anywhere to start the game!</p>
+    <button id="startBtn" style="background:var(--accent); color:#0b0f1a; padding:16px 32px; border:none; border-radius:12px; font-size:20px; font-weight:700; cursor:pointer;">🎮 Start Game</button>
+  </div>
+</div>
+<div id="gameover" class="overlay hidden">
         <h1>Game Over</h1>
         <p id="newBest" class="newbest hidden">NEW BEST!</p>
         <p>Score: <b id="finalScore">0</b></p>
@@ -319,14 +327,18 @@ function prewarmOscillators() {
 }
 
 function ensureAudio() {
-  if (!audioCtx) {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    master = audioCtx.createGain();
-    master.gain.value = 0.5;
-    master.connect(audioCtx.destination);
-    prewarmOscillators();
+  try {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      master = audioCtx.createGain();
+      master.gain.value = 0.5;
+      master.connect(audioCtx.destination);
+      prewarmOscillators();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch(e) {
+    // ignore — audio will work on first interaction
   }
-  if (audioCtx.state === 'suspended') audioCtx.resume();
 }
 
 // Grab a pooled oscillator and schedule it immediately (near-zero latency)
@@ -756,6 +768,25 @@ canvas.addEventListener('touchend', (e) => {
 document.addEventListener('keydown', () => ensureAudio());
 document.addEventListener('pointerdown', () => ensureAudio());
 
+
+// Show start overlay on load for better UX
+document.getElementById('startOverlay')?.classList.remove('hidden');
+document.getElementById('startBtn').addEventListener('click', () => { 
+  document.getElementById('startOverlay').classList.add('hidden');
+  handleInput('new'); // Start new game
+});
+
+// Also hide when any key or pointer event happens
+document.addEventListener('keydown', e => { 
+  if (e.key) { 
+    document.getElementById('startOverlay')?.classList.add('hidden'); 
+    handleInput(e.key.length === 1 ? e.key.toLowerCase() : 'new'); 
+  } 
+}, true);
+document.addEventListener('pointerdown', () => { 
+  document.getElementById('startOverlay')?.classList.add('hidden'); 
+  handleInput('new'); 
+});
 loadHigh();
 reset();
 
