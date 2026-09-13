@@ -772,8 +772,8 @@ document.addEventListener('pointerdown', () => ensureAudio());
 // Show start overlay on load for better UX
 document.getElementById('startOverlay')?.classList.remove('hidden');
 document.getElementById('startBtn').addEventListener('click', () => { 
-  document.getElementById('startOverlay').classList.add('hidden');
-  handleInput('new'); // Start new game
+  document.getElementById('startOverlay')?.classList.add('hidden'); 
+  handleInput('new'); 
 });
 
 // Also hide when any key or pointer event happens
@@ -784,7 +784,7 @@ document.addEventListener('keydown', e => {
   } 
 }, true);
 document.addEventListener('pointerdown', () => { 
-  document.getElementById('startOverlay')?.classList.add('hidden'); 
+  document.getElementById('startOverlay')?.classList.remove('hidden'); 
   handleInput('new'); 
 });
 loadHigh();
