@@ -765,13 +765,8 @@ canvas.addEventListener('touchend', (e) => {
 }, { passive: true });
 
 // start audio on any first interaction (browser autoplay policy)
-// Start overlay - game won't start until user clicks to show it
-// This handles browser autoplay policy by requiring user interaction first
 const hideOverlay = () => {
   document.getElementById('startOverlay')?.classList.add('hidden');
-  if (audioCtx) {
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-  }
 };
 
 document.getElementById('startBtn').addEventListener('click', hideOverlay);
@@ -781,7 +776,9 @@ document.addEventListener('keydown', e => {
 document.addEventListener('pointerdown', hideOverlay);
 
 loadHigh();
-() { raf = requestAnimationFrame(loop); })();
+reset();
+
+(function loop() { raf = requestAnimationFrame(loop); })();
 </script>
 </body>
 </html>
