@@ -143,14 +143,6 @@
   <div class="wrap">
     <div class="board-wrap">
       <canvas id="board" width="300" height="600"></canvas>
-      
-<div class="start-overlay hidden" id="startOverlay">
-  <div style="text-align:center; padding:20px;">
-    <h1 style="color:var(--accent); font-size:48px; margin-bottom:8px;">Tokyo Night Tetris</h1>
-    <p style="color:var(--muted); font-size:16px;">Click anywhere to start the game!</p>
-    <button id="startBtn" style="background:var(--accent); color:#0b0f1a; padding:16px 32px; border:none; border-radius:12px; font-size:20px; font-weight:700; cursor:pointer;">🎮 Start Game</button>
-  </div>
-</div>
 <div id="gameover" class="overlay hidden">
         <h1>Game Over</h1>
         <p id="newBest" class="newbest hidden">NEW BEST!</p>
@@ -178,9 +170,9 @@
       <div class="btn-row">
         <button id="pauseBtn" class="secondary" style="flex:1">Pause</button>
         <button id="newBtn" style="flex:1">New</button>
-        <button id="muteBtn" class="secondary" style="flex:1" title="Toggle sound (M)">Sound</button>
+        <button id="muteBtn" class="secondary" style="flex:1" title="Enable or toggle sound (M)">Enable sound</button>
       </div>
-      <div class="version-badge">v1.4.4</div>
+      <div class="version-badge">v1.4.5</div>
       <!-- Mobile touch controls -->
       <div class="mobile-controls" id="mobileControls">
         <button class="touch-btn" id="btnLeft">&#8592;</button>
@@ -301,62 +293,47 @@ function ghostY() {
   return gy;
 }
 
-// ---- Audio: pooled oscillators for low-latency sound effects ----
+// ---- Audio: create the context on interaction, schedule each note independently ----
 let audioCtx = null;
 let master = null;
 let muted = false;
-let audioReady = false;
-// Pool of pre-warmed oscillators ready to fire instantly
-const OSC_POOL_SIZE = 12;
-const oscPool = [];
-const gainPool = [];
-
-// Pre-warm all oscillators at startup so none are cold
-function prewarmOscillators() {
-  for (let i = 0; i < OSC_POOL_SIZE; i++) {
-    const o = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    g.gain.value = 0.0001; // silent by default
-    o.connect(g);
-    g.connect(master);
-    o.start();
-    oscPool.push(o);
-    gainPool.push(g);
-  }
-  audioReady = true;
-}
 
 function ensureAudio() {
   try {
     if (!audioCtx) {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
       master = audioCtx.createGain();
-      master.gain.value = 0.5;
+      master.gain.value = muted ? 0 : 0.5;
       master.connect(audioCtx.destination);
-      prewarmOscillators();
+      document.getElementById('muteBtn').textContent = muted ? 'Muted' : 'Sound';
     }
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-  } catch(e) {
-    // ignore — audio will work on first interaction
+    if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
+      audioCtx.resume().catch(error => console.warn('Unable to resume game audio:', error));
+    }
+  } catch (error) {
+    console.warn('Unable to enable game audio:', error);
   }
 }
 
-// Grab a pooled oscillator and schedule it immediately (near-zero latency)
+// Separate voices preserve overlapping effects and the timing of multi-note melodies.
 function fireOsc(type, freq, t, dur, vol) {
-  const now = audioCtx.currentTime;
-  // Find a free or recycled oscillator from the pool
-  const idx = Math.floor(now * 7) % OSC_POOL_SIZE; // pseudo-round-robin
-  const o = oscPool[idx];
-  const g = gainPool[idx];
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
   o.type = type;
-  o.frequency.setValueAtTime(freq, now);
-  g.gain.setValueAtTime(0.0001, now);
-  g.gain.exponentialRampToValueAtTime(vol, now + 0.008);
-  g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+  o.frequency.setValueAtTime(freq, t);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(vol, t + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  g.gain.linearRampToValueAtTime(0, t + dur + 0.01);
+  o.connect(g);
+  g.connect(master);
+  o.onended = () => { o.disconnect(); g.disconnect(); };
+  o.start(t);
+  o.stop(t + dur + 0.01);
 }
 
 function sfx(name, cleared) {
-  if (muted || !audioReady) return;
+  if (muted || !audioCtx || !master) return;
   const t = audioCtx.currentTime;
   switch (name) {
     case 'move':   fireOsc('square', 220, t, 0.06, 0.10); break;
@@ -401,7 +378,17 @@ function sfx(name, cleared) {
 }
 
 function toggleMute() {
+  if (!audioCtx) {
+    ensureAudio();
+    sfx('move');
+    return;
+  }
   muted = !muted;
+  master.gain.setValueAtTime(muted ? 0 : 0.5, audioCtx.currentTime);
+  if (!muted) {
+    ensureAudio();
+    sfx('move');
+  }
   const btn = document.getElementById('muteBtn');
   btn.textContent = muted ? 'Muted' : 'Sound';
 }
@@ -659,7 +646,6 @@ function scheduleDrop() {
 }
 
 function reset() {
-  ensureAudio();
   board = emptyBoard();
   score = 0; lines = 0; level = 1; prevLevel = 1;
   gameOver = false; paused = false;
@@ -691,6 +677,7 @@ function togglePause() {
 
 // --- controls ---
 function handleInput(action) {
+  if (action === 'mute') { toggleMute(); return; }
   if (gameOver) return;
   ensureAudio();
   let moved = false;
@@ -706,13 +693,13 @@ function handleInput(action) {
     hardDrop();
   } else if (action === 'pause') {
     togglePause();
-  } else if (action === 'mute') {
-    toggleMute();
   }
   if (moved) sfx('move');
 }
 
 document.addEventListener('keydown', (e) => {
+  if (e.target.closest?.('button') && (e.key === ' ' || e.key === 'Enter')) return;
+  if (e.key === 'm' || e.key === 'M') { handleInput('mute'); return; }
   if (gameOver) return;
   const k = e.key;
   if (['ArrowLeft','ArrowRight','ArrowDown','ArrowUp',' '].includes(k)) e.preventDefault();
@@ -722,7 +709,6 @@ document.addEventListener('keydown', (e) => {
   else if (k === 'ArrowUp')     handleInput('rotate');
   else if (k === ' ')           handleInput('drop');
   else if (k === 'p' || k === 'P') handleInput('pause');
-  else if (k === 'm' || k === 'M') handleInput('mute');
 });
 
 // FEATURE 5: Mobile touch controls
@@ -764,16 +750,15 @@ canvas.addEventListener('touchend', (e) => {
   }
 }, { passive: true });
 
-// start audio on any first interaction (browser autoplay policy)
-const hideOverlay = () => {
-  document.getElementById('startOverlay')?.classList.add('hidden');
-};
-
-document.getElementById('startBtn').addEventListener('click', hideOverlay);
-document.addEventListener('keydown', e => { 
-  if (e.key) handleInput(e.key.length === 1 ? e.key.toLowerCase() : 'new');
-}, true);
-document.addEventListener('pointerdown', hideOverlay);
+// Browser autoplay policies require a real keyboard, mouse, or touch gesture.
+// Let the sound button and M key enable audio before they start toggling mute.
+function unlockAudio(event) {
+  if (event.target.closest?.('#muteBtn') || event.key?.toLowerCase() === 'm') return;
+  ensureAudio();
+}
+document.addEventListener('pointerdown', unlockAudio, true);
+document.addEventListener('pointerup', unlockAudio, true);
+document.addEventListener('keydown', unlockAudio, true);
 
 loadHigh();
 reset();

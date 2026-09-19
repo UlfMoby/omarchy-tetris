@@ -7,13 +7,14 @@ A single-file HTML Tetris game — no build step, no dependencies. Open `index.h
 **Live:** [https://ulfmoby.github.io/omarchy-tetris/](https://ulfmoby.github.io/omarchy-tetris/)
 
 ---
-## Latest release — v1.4.4
+## Latest release — v1.4.5
 
-- Fixed invalid JavaScript in the piece definitions that prevented the game from starting.
-- Restored the Tokyo Night background and best-score colors.
-- The game starts automatically when the page loads; sound activates on interaction.
+- Fixed sound activation on keyboard, mouse, and touch interaction.
+- Added an **Enable sound** button; its first activation enables audio rather than muting it.
+- Fixed overlapping sound effects and restored the timing of multi-note melodies.
+- Muting now silences active and scheduled sounds immediately.
 
-[Download v1.4.4](https://github.com/UlfMoby/omarchy-tetris/releases/tag/v1.4.4). Open the attached `index.html` to play offline.
+[Download v1.4.5](https://github.com/UlfMoby/omarchy-tetris/releases/tag/v1.4.5). Open the attached `index.html` to play offline.
 
 ---
 
@@ -42,9 +43,11 @@ A single-file HTML Tetris game — no build step, no dependencies. Open `index.h
 | ↑ | Rotate |
 | Space | Hard drop |
 | P | Pause / resume |
-| M | Mute / unmute |
+| M | Enable sound / mute / unmute |
 
 **Mobile:** On-screen touch buttons and swipe gestures on the board.
+
+**Sound:** Browsers block audio until you interact with the page. Click or tap the board, use a game key, or select **Enable sound**. After activation, the **Sound / Muted** button or **M** toggles audio.
 
 ---
 
