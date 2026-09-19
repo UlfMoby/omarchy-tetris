@@ -25,7 +25,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: radial-gradient(1500px 800px at 50% -15%, \#2d1b4e 0%, \#151025 50%, var(--bg) 80%);
+    background: radial-gradient(1500px 800px at 50% -15%, #2d1b4e 0%, #151025 50%, var(--bg) 80%);
     font-family: system-ui, -apple-system, sans-serif;
     color: var(--text);
     touch-action: none;
@@ -82,7 +82,7 @@
     animation: pop .6s ease infinite alternate;
   }
   @keyframes pop { from { transform: scale(1); } to { transform: scale(1.08); } }
-  .stat .value.best { color: \#ec4899; font-weight: 700; text-shadow: 0 0 12px rgba(236,72,153,0.6); }
+  .stat .value.best { color: #ec4899; font-weight: 700; text-shadow: 0 0 12px rgba(236,72,153,0.6); }
 
   /* Mobile touch controls */
   .mobile-controls {
@@ -180,7 +180,7 @@
         <button id="newBtn" style="flex:1">New</button>
         <button id="muteBtn" class="secondary" style="flex:1" title="Toggle sound (M)">Sound</button>
       </div>
-      <div class="version-badge">v1.4.2</div>
+      <div class="version-badge">v1.4.4</div>
       <!-- Mobile touch controls -->
       <div class="mobile-controls" id="mobileControls">
         <button class="touch-btn" id="btnLeft">&#8592;</button>
@@ -198,32 +198,32 @@ const COLS = 10, ROWS = 20, CELL = 30;
 
 const SHAPES = [
   { // I
-    color: '#2dd4bf';
-    , cells: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]]
+    color: '#2dd4bf',
+    cells: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]]
   },
   { // O
-    color: '#fb923c';
-    , cells: [[1,1],[1,1]]
+    color: '#fb923c',
+    cells: [[1,1],[1,1]]
   },
   { // T
-    color: '#c084fc';
-    , cells: [[0,1,0],[1,1,1],[0,0,0]]
+    color: '#c084fc',
+    cells: [[0,1,0],[1,1,1],[0,0,0]]
   },
   { // S
-    color: '#10b981';
-    , cells: [[0,1,1],[1,1,0],[0,0,0]]
+    color: '#10b981',
+    cells: [[0,1,1],[1,1,0],[0,0,0]]
   },
   { // Z
-    color: '#f43f5e';
-    , cells: [[1,1,0],[0,1,1],[0,0,0]]
+    color: '#f43f5e',
+    cells: [[1,1,0],[0,1,1],[0,0,0]]
   },
   { // J
-    color: '#a78bfa';
-    , cells: [[1,0,0],[1,1,1],[0,0,0]]
+    color: '#a78bfa',
+    cells: [[1,0,0],[1,1,1],[0,0,0]]
   },
   { // L
-    color: '#f97316';
-    , cells: [[0,0,1],[1,1,1],[0,0,0]]
+    color: '#f97316',
+    cells: [[0,0,1],[1,1,1],[0,0,0]]
   },
 ];
 

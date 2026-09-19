@@ -7,6 +7,16 @@ A single-file HTML Tetris game — no build step, no dependencies. Open `index.h
 **Live:** [https://ulfmoby.github.io/omarchy-tetris/](https://ulfmoby.github.io/omarchy-tetris/)
 
 ---
+## Latest release — v1.4.4
+
+- Fixed invalid JavaScript in the piece definitions that prevented the game from starting.
+- Restored the Tokyo Night background and best-score colors.
+- The game starts automatically when the page loads; sound activates on interaction.
+
+[Download v1.4.4](https://github.com/UlfMoby/omarchy-tetris/releases/tag/v1.4.4). Open the attached `index.html` to play offline.
+
+---
+
 
 ## Features
 
